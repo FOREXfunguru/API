@@ -21,7 +21,7 @@ o_logger.setLevel(logging.INFO)
 
 class Connect(object):
     """
-    Class representing a connection with the Oanda's REST API
+    Class representing a connection to the Oanda's REST API
     """
 
     def __init__(self, instrument, granularity, settingf):
@@ -317,7 +317,7 @@ class Connect(object):
         raise ValueError('no valid date format found')
 
     def __repr__(self):
-        return "BidAskCandle"
+        return "connect"
 
     def __str__(self):
         out_str = ""
