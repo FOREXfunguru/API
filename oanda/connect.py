@@ -13,7 +13,7 @@ import re
 import pandas as pd
 import json
 
-from configparser import ConfigParser
+from oanda.config import CONFIG
 
 # create logger
 o_logger = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ class Connect(object):
     Class representing a connection to the Oanda's REST API
     """
 
-    def __init__(self, instrument, granularity, settingf):
+    def __init__(self, instrument, granularity):
         '''
         Constructor
 
@@ -34,19 +34,9 @@ class Connect(object):
                     Trading pair. i.e. AUD_USD. Required
         granularity: string
                      Timeframe. i.e. D. Required
-        settingf : str, Required
-                   Path to *.ini file with settings
         '''
         self.instrument = instrument
         self.granularity = granularity
-        if os.path.isfile(settingf) == False:
-            raise Exception("{0} with settings was not found".format(settingf))
-        else:
-            self.settingf = settingf
-        # parse settings file (in .ini file)
-        parser = ConfigParser()
-        parser.read(settingf)
-        self.settings = parser
 
     def retry(cooloff=5, exc_type=None):
         '''
@@ -114,18 +104,18 @@ class Connect(object):
         params['granularity'] = self.granularity
         params['start'] = start
         try:
-            resp = requests.get(url=self.settings.get('settings', 'url'),
+            resp = requests.get(url=CONFIG.get('settings', 'url'),
                                 params=params)
             if resp.status_code != 200:
                 raise Exception(resp.status_code)
             else:
+                data = json.loads(resp.content.decode("utf-8"))
                 if outfile is not None:
-                    ser_data = json.dumps(resp.content.decode("utf-8"))
+                    ser_data = json.dumps(data)
                     f = open(outfile, "w")
                     f.write(ser_data)
                     f.close()
-                else:
-                    return json.loads(resp.content.decode("utf-8"))
+                return data
         except Exception as err:
             # This means something went wrong.
             print("Something went wrong. url used was:\n{0}".format(resp.url))
@@ -181,11 +171,11 @@ class Connect(object):
         params['granularity'] = self.granularity
         params['start'] = datestr
         params['end'] = endObj.isoformat()
-        resp = requests.get(url=self.settings.get('settings', 'url'),
+        resp = requests.get(url=CONFIG.get('settings', 'url'),
                             params=params)
         # 204 code means 'no_content'
         if resp.status_code == 204:
-            if self.settings.getboolean('settings', 'roll') is True:
+            if CONFIG.getboolean('settings', 'roll') is True:
                 dateObj = self.__roll_datetime(dateObj, granularity)
             else:
                 raise Exception("Date {0} is not valid and falls on closed market".format(datestr))
@@ -220,10 +210,10 @@ class Connect(object):
                  Returns the rolled datetime object
         '''
         # check if dateObj is previous to the start of historical data for self.instrument
-        if not self.settings.has_option('pairs_start', self.instrument):
+        if not CONFIG.has_option('pairs_start', self.instrument):
             raise Exception("Inexistent start of historical record info for {0}".format(self.instrument))
 
-        start_hist_dtObj = self.try_parsing_date(self.settings.get('pairs_start', self.instrument))
+        start_hist_dtObj = self.try_parsing_date(CONFIG.get('pairs_start', self.instrument))
         if dateObj < start_hist_dtObj:
             rolledateObj = start_hist_dtObj
             o_logger.debug("Date precedes the start of the historical record.\n"
@@ -257,7 +247,7 @@ class Connect(object):
             params['start'] = dateObj.isoformat()
             params['end'] = endObj.isoformat()
 
-            resp = requests.get(url=self.settings.get('settings', 'url'),
+            resp = requests.get(url=CONFIG.get('settings', 'url'),
                                 params=params)
             resp_code = resp.status_code
         o_logger.debug("Time was rolled from {0} to {1}".format(dateObj, startObj))
