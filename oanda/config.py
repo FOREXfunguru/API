@@ -1,6 +1,10 @@
+'''
+@date: 22/11/2020
+@author: Ernesto Lowy
+@email: ernestolowy@gmail.com
+'''
 from configparser import ConfigParser
 import os
-import pdb
 DEFAULT_CONFIG_FILE = 'settings.ini'
 
 def get_config_file():

@@ -3,8 +3,6 @@
 @author: Ernesto Lowy
 @email: ernestolowy@gmail.com
 '''
-import os
-import pdb
 import datetime
 import time
 import logging
@@ -12,6 +10,7 @@ import requests
 import re
 import pandas as pd
 import json
+import pdb
 
 from oanda.config import CONFIG
 
@@ -23,7 +22,6 @@ class Connect(object):
     """
     Class representing a connection to the Oanda's REST API
     """
-
     def __init__(self, instrument, granularity):
         '''
         Constructor
@@ -61,11 +59,63 @@ class Connect(object):
 
         return real_decorator
 
+    def __parse_ser_data(self, infile, params):
+        """
+        Private function that will parse the serialized JSON file
+        with FOREX data and will execute the desired query
+
+        Parameters
+        ----------
+        infile : str
+                 JSON file with serialized FOREX data
+        params : Dictionary with params of the query.
+                 i.e. start, end, count ...
+        Returns
+        -------
+        List of dicts. Each dict contains data for a candle
+        """
+        inf = open(infile, 'r')
+        parsed_json = json.load(inf)
+        inf.close()
+
+        new_candles = []
+        ct = 0
+        delta1hr = datetime.timedelta(hours=1)
+        start = datetime.datetime.strptime(params['start'], '%Y-%m-%dT%H:%M:%S')
+        for c in parsed_json['candles']:
+            c_time = datetime.datetime.strptime(c['time'], '%Y-%m-%dT%H:%M:%S.%fZ')
+            if 'end' in params:
+                end = datetime.datetime.strptime(params['end'], '%Y-%m-%dT%H:%M:%S')
+                if ((c_time >= start) or (abs(c_time - start) <= delta1hr)) and (
+                        (c_time <= end) or (abs(c_time - end) <= delta1hr)):
+                    new_candles.append(c)
+                elif (c_time >= end) and (abs(c_time - end) > delta1hr):
+                    break
+            elif params['count'] is not None:
+                if ((c_time >= start) or (abs(c_time - start) <= delta1hr)) and ct < params['count']:
+                    ct += 1
+                    new_candles.append(c)
+                elif ct > params['count']:
+                    break
+        new_dict = parsed_json.copy()
+        del new_dict['candles']
+        new_dict['candles'] = new_candles
+        return new_dict
+
     @retry()
-    def query(self, start, end=None, count=None, outfile=None):
+    def query(self, start, end=None, count=None,
+              infile=None, outfile=None):
         '''
-        Function to run a particular REST API query
-        with a start and end datetimes
+        Function 'query' overloads and will behave differently
+        depending on the presence/absence of the following args:
+
+        'infile': If this arg is present, then the query of FOREX
+        data will be done on the serialized data in the JSON format.
+        'outfile': If this arg is present, then the function will
+        query the REST API and will serialized the data into a JSON
+        file.
+        Finally, if neither 'infile' nor 'outfile' are present, then
+        the function will do a REST API query and nothing else
 
         Parameters
         ----------
@@ -77,13 +127,15 @@ class Connect(object):
                If end is not defined, this controls the
                number of candles from the start
                that will be retrieved
+        infile: str
+                JSON file with serialized FOREX data
         outfile: str
-                 File to write serialized data returned
-                 by the API
+                 File to write the serialized data returned
+                 by the API. Optional
 
         Returns
         -------
-        dict with candle data
+        List of dicts. Each dict contains data for a candle
         '''
 
         startObj = self.validate_datetime(start, self.granularity)
@@ -103,25 +155,28 @@ class Connect(object):
         params['instrument'] = self.instrument
         params['granularity'] = self.granularity
         params['start'] = start
-        try:
-            resp = requests.get(url=CONFIG.get('settings', 'url'),
-                                params=params)
-            if resp.status_code != 200:
-                raise Exception(resp.status_code)
-            else:
-                data = json.loads(resp.content.decode("utf-8"))
-                if outfile is not None:
-                    ser_data = json.dumps(data)
-                    f = open(outfile, "w")
-                    f.write(ser_data)
-                    f.close()
-                return data
-        except Exception as err:
-            # This means something went wrong.
-            print("Something went wrong. url used was:\n{0}".format(resp.url))
-            print("Error message was: {0}".format(err))
+        if infile is not None:
+            return self.__parse_ser_data(infile, params)
+        else:
+            try:
+                resp = requests.get(url=CONFIG.get('oanda_api', 'url'),
+                                    params=params)
+                if resp.status_code != 200:
+                    raise Exception(resp.status_code)
+                else:
+                    data = json.loads(resp.content.decode("utf-8"))
+                    if outfile is not None:
+                        ser_data = json.dumps(data)
+                        f = open(outfile, "w")
+                        f.write(ser_data)
+                        f.close()
+                    return data
+            except Exception as err:
+                # Something went wrong.
+                print("Something went wrong. url used was:\n{0}".format(resp.url))
+                print("Error message was: {0}".format(err))
+                return resp.status_code
             return resp.status_code
-        return resp.status_code
 
     def validate_datetime(self, datestr, granularity):
         '''
@@ -171,11 +226,11 @@ class Connect(object):
         params['granularity'] = self.granularity
         params['start'] = datestr
         params['end'] = endObj.isoformat()
-        resp = requests.get(url=CONFIG.get('settings', 'url'),
+        resp = requests.get(url=CONFIG.get('oanda_api', 'url'),
                             params=params)
         # 204 code means 'no_content'
         if resp.status_code == 204:
-            if CONFIG.getboolean('settings', 'roll') is True:
+            if CONFIG.getboolean('oanda_api', 'roll') is True:
                 dateObj = self.__roll_datetime(dateObj, granularity)
             else:
                 raise Exception("Date {0} is not valid and falls on closed market".format(datestr))
@@ -247,7 +302,7 @@ class Connect(object):
             params['start'] = dateObj.isoformat()
             params['end'] = endObj.isoformat()
 
-            resp = requests.get(url=CONFIG.get('settings', 'url'),
+            resp = requests.get(url=CONFIG.get('oanda_api', 'url'),
                                 params=params)
             resp_code = resp.status_code
         o_logger.debug("Time was rolled from {0} to {1}".format(dateObj, startObj))

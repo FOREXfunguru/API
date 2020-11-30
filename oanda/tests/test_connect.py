@@ -38,10 +38,28 @@ def test_query_c(conn_o):
     assert res['granularity'] == 'D'
     assert len(res['candles']) == 1
 
-def test_query_ser(conn_o, clean_tmp):
-    log = logging.getLogger('test_query_ser')
+def test_query_ser_out(conn_o, clean_tmp):
+    log = logging.getLogger('test_query_ser_out')
     log.debug('Test for \'query\' function and serializing returned data')
     conn_o.query('2018-11-16T22:00:00', count=1, outfile="../data/ser.dmp")
+
+def test_query_ser_in_ct(conn_o, clean_tmp):
+    log = logging.getLogger('test_query_ser_in_ct')
+    log.debug('Test for \'query\' function and read-in serialized data with \'count\'')
+    res_pre = conn_o.query('2018-11-16T22:00:00', count=10, outfile="../data/ser.dmp")
+    assert len(res_pre['candles']) == 10
+    res_aft = conn_o.query('2018-11-16T22:00:00', count=2, infile="../data/ser.dmp")
+    assert len(res_aft['candles']) == 2
+
+def test_query_ser_in_s_e(conn_o, clean_tmp):
+    log = logging.getLogger('test_query_ser_in_s_e')
+    log.debug('Test for \'query\' function and read-in serialized data'
+              ' with \'start\' with \'end\'')
+    res_pre = conn_o.query('2018-11-16T22:00:00', count=10, outfile="../data/ser.dmp")
+    assert len(res_pre['candles']) == 10
+    res_aft = conn_o.query(start='2018-11-16T22:00:00', end='2018-11-19T22:00:00',
+                           infile="../data/ser.dmp")
+    assert len(res_aft['candles']) == 2
 
 def test_query_e():
     '''
