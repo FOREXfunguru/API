@@ -102,6 +102,72 @@ class Connect(object):
         new_dict['candles'] = new_candles
         return new_dict
 
+    def mquery(self, start, end, outfile=None):
+        '''
+        Function to execute a batch query on the Oanda API
+        This is necessary when for example, the query hits
+        the max number of returned candles for the Oanda API
+
+        Parameters
+        ----------
+        start: Datetime in isoformat
+               Date and time for first candle. Required
+        end:   Datetime in isoformat
+               Date and time for last candle. Required
+        outfile: str
+                 File to write the serialized data returned
+                 by the API. Optional
+
+        Returns
+        -------
+        List of dicts. Each dict contains data for a candle
+        '''
+
+        startO = datetime.datetime.strptime(start, '%Y-%m-%dT%H:%M:%S')
+        endO = datetime.datetime.strptime(end, '%Y-%m-%dT%H:%M:%S')
+
+        patt = re.compile("\dD")
+        delta = nhours = None
+        if patt.match(self.granularity):
+            raise Exception("{0} is not valid. Oanda REST service does not accept it".format(granularity))
+        elif self.granularity == "D":
+            nhours = 24
+            delta = datetime.timedelta(hours=24)
+        else:
+            p1 = re.compile('^H')
+            m1 = p1.match(self.granularity)
+            if m1:
+                nhours = int(self.granularity.replace('H', ''))
+                delta = datetime.timedelta(hours=int(nhours))
+
+        # 5000 candles is the Oanda's limit
+        res = None
+        while startO <= endO:
+            if res is None:
+                res = self.query(startO.isoformat(), count=5000)
+            else:
+                res_l = self.query(startO.isoformat(), count=5000)
+                res['candles'] = res['candles'] + res_l['candles']
+            startO = datetime.datetime.strptime(res['candles'][-1]['time'],
+                                                '%Y-%m-%dT%H:%M:%S.%fZ')
+            if startO > endO:
+                new_list = []
+                for c in res['candles']:
+                    adtime = datetime.datetime.strptime(c['time'],
+                                                        '%Y-%m-%dT%H:%M:%S.%fZ')
+                    if adtime <= endO:
+                        new_list.append(c)
+                res['candles'] = new_list
+
+            startO = startO + delta
+
+        if outfile is not None:
+            ser_data = json.dumps(res)
+            f = open(outfile, "w")
+            f.write(ser_data)
+            f.close()
+        return res
+
     @retry()
     def query(self, start, end=None, count=None,
               infile=None, outfile=None):
@@ -197,10 +263,9 @@ class Connect(object):
             raise ValueError("Incorrect date format, should be %Y-%m-%dT%H:%M:%S")
 
         patt = re.compile("\dD")
-        nhours = None
-        delta = None
+        nhours = delta = None
         if patt.match(granularity):
-            raise Exception("{0} is not valid. Oanda rest service does not take it".format(granularity))
+            raise Exception("{0} is not valid. Oanda REST service does not accept it".format(granularity))
         elif granularity == "D":
             nhours=24
             delta = datetime.timedelta(hours=24)

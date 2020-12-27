@@ -43,6 +43,20 @@ def test_query_ser_out(conn_o, clean_tmp):
     log.debug('Test for \'query\' function and serializing returned data')
     conn_o.query('2018-11-16T22:00:00', count=1, outfile="../data/ser.dmp")
 
+def test_query_ser_out_max():
+    log = logging.getLogger('test_query_ser_out_max_number')
+    log.debug('Test for \'query\' function and serializing returned data with a query'
+              'above the max number of candles that Oanda accepts')
+
+    conn = Connect(
+        instrument="AUD_USD",
+        granularity='H8')
+
+    res = conn.mquery(start='2007-01-01T22:00:00',
+                      end='2020-01-01T22:00:00')
+
+    assert 10786 == len(res['candles'])
+
 def test_query_ser_in_ct(conn_o, clean_tmp):
     log = logging.getLogger('test_query_ser_in_ct')
     log.debug('Test for \'query\' function and read-in serialized data with \'count\'')
