@@ -232,7 +232,7 @@ class Connect(object):
         params['granularity'] = self.granularity
         params['start'] = start
         if infile is not None:
-            o_logger.info("Serialized data provided. Candles will be"
+            o_logger.debug("Serialized data provided. Candles will be "
                           "fetched from {0}".format(infile))
             return self.__parse_ser_data(infile, params)
         else:
