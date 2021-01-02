@@ -203,12 +203,22 @@ class Connect(object):
         -------
         List of dicts. Each dict contains data for a candle
         '''
+        startObj = None
 
-        startObj = self.validate_datetime(start, self.granularity)
+        if infile is not None:
+            # do not validate if there is serialized data
+            startObj = pd.datetime.strptime(start, '%Y-%m-%dT%H:%M:%S')
+        else:
+            startObj = self.validate_datetime(start, self.granularity)
         start = startObj.isoformat()
         params = {}
         if end is not None and count is None:
-            endObj = self.validate_datetime(end, self.granularity)
+            endObj = None
+            if infile is not None:
+                # do not validate if there is serialized data
+                endObj = pd.datetime.strptime(end, '%Y-%m-%dT%H:%M:%S')
+            else:
+                endObj = self.validate_datetime(end, self.granularity)
             min = datetime.timedelta(minutes=1)
             endObj = endObj + min
             end = endObj.isoformat()
