@@ -13,6 +13,7 @@ import json
 import pdb
 
 from oanda.config import CONFIG
+import time
 
 # create logger
 o_logger = logging.getLogger(__name__)
@@ -82,6 +83,8 @@ class Connect(object):
         ct = 0
         delta1hr = datetime.timedelta(hours=1)
         start = datetime.datetime.strptime(params['start'], '%Y-%m-%dT%H:%M:%S')
+
+        start_t = time.time()
         for c in parsed_json['candles']:
             c_time = datetime.datetime.strptime(c['time'], '%Y-%m-%dT%H:%M:%S.%fZ')
             if 'end' in params:
@@ -97,6 +100,10 @@ class Connect(object):
                     new_candles.append(c)
                 elif ct > params['count']:
                     break
+
+        end_t = time.time()
+        print(end_t - start_t)
+
         new_dict = parsed_json.copy()
         del new_dict['candles']
         new_dict['candles'] = new_candles
