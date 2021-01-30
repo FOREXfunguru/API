@@ -60,54 +60,65 @@ class Connect(object):
 
         return real_decorator
 
-    def __parse_ser_data(self, infile, params):
+    def __parse_ser_data(self, indir, params):
         """
         Private function that will parse the serialized JSON file
         with FOREX data and will execute the desired query
 
         Parameters
         ----------
-        infile : str
-                 JSON file with serialized FOREX data
+        indir : str
+                path to dir containing the serialized data
         params : Dictionary with params of the query.
                  i.e. start, end, count ...
         Returns
         -------
         List of dicts. Each dict contains data for a candle
         """
-        inf = open(infile, 'r')
-        parsed_json = json.load(inf)
-        inf.close()
+        start_t = time.time()
+        start = datetime.datetime.strptime(params['start'], '%Y-%m-%dT%H:%M:%S')
+        end = datetime.datetime.strptime(params['end'], '%Y-%m-%dT%H:%M:%S')
+        year_start = start.year
+        year_end = end.year
 
         new_candles = []
-        ct = 0
         delta1hr = datetime.timedelta(hours=1)
-        start = datetime.datetime.strptime(params['start'], '%Y-%m-%dT%H:%M:%S')
+        for year in range(2007, 2021+1):
+            if year < year_start:
+                continue
+            elif year > year_end:
+                break
+            else:
+                infile = "{0}/{1}.{2}.{3}.ser".format(indir, self.instrument,
+                                                      self.granularity, year)
+                inf = open(infile, 'r')
+                parsed_json = json.load(inf)
+                inf.close()
+                if year == year_start or year == year_end:
+                    for c in parsed_json['candles']:
+                        c_time = datetime.datetime.strptime(c['time'], '%Y-%m-%dT%H:%M:%S.%fZ')
+                        if ((c_time >= start) or (abs(c_time - start) <= delta1hr)) and ((c_time <= end) or (abs(c_time - end) <= delta1hr)):
+                            new_candles.append(c)
+                        elif (c_time >= end) and (abs(c_time - end) > delta1hr):
+                            break
+                else:
+                    new_candles = new_candles + parsed_json['candles']
 
-        start_t = time.time()
-        for c in parsed_json['candles']:
-            c_time = datetime.datetime.strptime(c['time'], '%Y-%m-%dT%H:%M:%S.%fZ')
-            if 'end' in params:
-                end = datetime.datetime.strptime(params['end'], '%Y-%m-%dT%H:%M:%S')
-                if ((c_time >= start) or (abs(c_time - start) <= delta1hr)) and (
-                        (c_time <= end) or (abs(c_time - end) <= delta1hr)):
-                    new_candles.append(c)
-                elif (c_time >= end) and (abs(c_time - end) > delta1hr):
-                    break
-            elif params['count'] is not None:
-                if ((c_time >= start) or (abs(c_time - start) <= delta1hr)) and ct < params['count']:
-                    ct += 1
-                    new_candles.append(c)
-                elif ct > params['count']:
-                    break
-
+        new_dict = {'granularity': self.granularity,
+                    'instrument' : self.instrument,
+                    'candles' : new_candles}
         end_t = time.time()
         print(end_t - start_t)
-
-        new_dict = parsed_json.copy()
-        del new_dict['candles']
-        new_dict['candles'] = new_candles
         return new_dict
+
+
+
+          #  elif params['count'] is not None:
+          #      if ((c_time >= start) or (abs(c_time - start) <= delta1hr)) and ct < params['count']:
+          #          ct += 1
+          #          new_candles.append(c)
+          #      elif ct > params['count']:
+          #          break
 
     def mquery(self, start, end, outfile=None):
         '''
@@ -177,12 +188,12 @@ class Connect(object):
 
     @retry()
     def query(self, start, end=None, count=None,
-              infile=None, outfile=None):
+              indir=None, outfile=None):
         '''
         Function 'query' overloads and will behave differently
         depending on the presence/absence of the following args:
 
-        'infile': If this arg is present, then the query of FOREX
+        'indir': If this arg is present, then the query of FOREX
         data will be done on the serialized data in the JSON format.
         'outfile': If this arg is present, then the function will
         query the REST API and will serialized the data into a JSON
@@ -200,8 +211,8 @@ class Connect(object):
                If end is not defined, this controls the
                number of candles from the start
                that will be retrieved
-        infile: str
-                JSON file with serialized FOREX data
+        indir: path
+               path to DIR containing the JSON files with serialized FOREX data
         outfile: str
                  File to write the serialized data returned
                  by the API. Optional
@@ -212,7 +223,7 @@ class Connect(object):
         '''
         startObj = None
 
-        if infile is not None:
+        if indir is not None:
             # do not validate if there is serialized data
             startObj = pd.datetime.strptime(start, '%Y-%m-%dT%H:%M:%S')
         else:
@@ -221,7 +232,7 @@ class Connect(object):
         params = {}
         if end is not None and count is None:
             endObj = None
-            if infile is not None:
+            if indir is not None:
                 # do not validate if there is serialized data
                 endObj = pd.datetime.strptime(end, '%Y-%m-%dT%H:%M:%S')
             else:
@@ -238,10 +249,10 @@ class Connect(object):
         params['instrument'] = self.instrument
         params['granularity'] = self.granularity
         params['start'] = start
-        if infile is not None:
+        if indir is not None:
             o_logger.debug("Serialized data provided. Candles will be "
-                          "fetched from {0}".format(infile))
-            return self.__parse_ser_data(infile, params)
+                          "fetched from files in dir {0}".format(indir))
+            return self.__parse_ser_data(indir, params)
         else:
             try:
                 resp = requests.get(url=CONFIG.get('oanda_api', 'url'),
