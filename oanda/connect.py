@@ -71,17 +71,20 @@ class Connect(object):
         new_candles = []
         delta1hr = datetime.timedelta(hours=1)
         ct = 0
-        ct_reached = False
+        inyear = False
         for year in range(2007, 2021):
             if year < year_start:
                 continue
             else:
+                if inyear is True:
+                    year_start = year
                 infile = "{0}/{1}.{2}.{3}.ser".format(indir, self.instrument,
                                                       self.granularity, year)
                 inf = open(infile, 'r')
                 parsed_json = json.load(inf)
                 inf.close()
                 if year == year_start:
+                    inyear = True
                     for c in parsed_json['candles']:
                         if ct == params['count']:
                             break
