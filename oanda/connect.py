@@ -60,10 +60,47 @@ class Connect(object):
 
         return real_decorator
 
-    def __parse_ser_data(self, indir, params):
+    def __parse_ser_data_c(self, indir, params):
         """
         Private function that will parse the serialized JSON file
-        with FOREX data and will execute the desired query
+        with FOREX data and will execute the desired query with
+        a 'start' and 'count' params
+        """
+        start = datetime.datetime.strptime(params['start'], '%Y-%m-%dT%H:%M:%S')
+        year_start = start.year
+        new_candles = []
+        delta1hr = datetime.timedelta(hours=1)
+        ct = 0
+        ct_reached = False
+        for year in range(2007, 2021):
+            if year < year_start:
+                continue
+            else:
+                infile = "{0}/{1}.{2}.{3}.ser".format(indir, self.instrument,
+                                                      self.granularity, year)
+                inf = open(infile, 'r')
+                parsed_json = json.load(inf)
+                inf.close()
+                if year == year_start:
+                    for c in parsed_json['candles']:
+                        if ct == params['count']:
+                            break
+                        c_time = datetime.datetime.strptime(c['time'], '%Y-%m-%dT%H:%M:%S.%fZ')
+                        if ((c_time >= start) or (abs(c_time - start) <= delta1hr)):
+                            new_candles.append(c)
+                            ct = ct+1
+
+        new_dict = {'granularity': self.granularity,
+                    'instrument' : self.instrument,
+                    'candles' : new_candles}
+
+        return new_dict
+
+    def __parse_ser_data_s_e(self, indir, params):
+        """
+        Private function that will parse the serialized JSON file
+        with FOREX data and will execute the desired query with
+        a 'start' and 'end' params
 
         Parameters
         ----------
@@ -75,7 +112,6 @@ class Connect(object):
         -------
         List of dicts. Each dict contains data for a candle
         """
-        start_t = time.time()
         start = datetime.datetime.strptime(params['start'], '%Y-%m-%dT%H:%M:%S')
         end = datetime.datetime.strptime(params['end'], '%Y-%m-%dT%H:%M:%S')
         year_start = start.year
@@ -107,18 +143,8 @@ class Connect(object):
         new_dict = {'granularity': self.granularity,
                     'instrument' : self.instrument,
                     'candles' : new_candles}
-        end_t = time.time()
-        print(end_t - start_t)
+
         return new_dict
-
-
-
-          #  elif params['count'] is not None:
-          #      if ((c_time >= start) or (abs(c_time - start) <= delta1hr)) and ct < params['count']:
-          #          ct += 1
-          #          new_candles.append(c)
-          #      elif ct > params['count']:
-          #          break
 
     def mquery(self, start, end, outfile=None):
         '''
@@ -198,7 +224,7 @@ class Connect(object):
         'outfile': If this arg is present, then the function will
         query the REST API and will serialized the data into a JSON
         file.
-        Finally, if neither 'infile' nor 'outfile' are present, then
+        Finally, if neither 'indir' nor 'outfile' are present, then
         the function will do a REST API query and nothing else
 
         Parameters
@@ -252,7 +278,10 @@ class Connect(object):
         if indir is not None:
             o_logger.debug("Serialized data provided. Candles will be "
                           "fetched from files in dir {0}".format(indir))
-            return self.__parse_ser_data(indir, params)
+            if 'end' in params:
+                return self.__parse_ser_data_s_e(indir, params)
+            elif 'count' in params:
+                return self.__parse_ser_data_c(indir, params)
         else:
             try:
                 resp = requests.get(url=CONFIG.get('oanda_api', 'url'),
