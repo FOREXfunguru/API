@@ -57,6 +57,20 @@ def test_query_ser_out_max():
 
     assert 10786 == len(res['candles'])
 
+def test_query_ser_M30():
+    log = logging.getLogger('test_query_ser_M30')
+    log.debug('Test for \'query\' function and serializing returned data with a query'
+              'using a M30 granularity')
+
+    conn = Connect(
+        instrument="AUD_USD",
+        granularity='M30')
+
+    res = conn.mquery(start='2010-11-30T22:00:00',
+                      end='2011-01-01T22:00:00')
+
+    assert 1147 == len(res['candles'])
+
 def test_query_ser_in_ct(conn_o, clean_tmp):
     log = logging.getLogger('test_query_ser_in_ct')
     log.debug('Test for \'query\' function and read-in serialized data with \'count\'')
@@ -114,3 +128,15 @@ def test_m_queries(i, g, s, e):
 
     respl = conn.query(start=s,
                        end=e)
+
+def test_query_M30():
+    log = logging.getLogger('test_query_M30')
+    log.debug('Test for \'query\' function with granularity M30')
+
+    conn = Connect(
+        instrument='AUD_USD',
+        granularity='M30')
+
+    respl = conn.query(start='2018-05-21T21:00:00',
+                       end='2018-05-23T21:00:00')
+    assert len(respl['candles']) == 97

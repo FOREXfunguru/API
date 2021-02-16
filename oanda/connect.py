@@ -89,9 +89,14 @@ class Connect(object):
                         if ct == params['count']:
                             break
                         c_time = datetime.datetime.strptime(c['time'], '%Y-%m-%dT%H:%M:%S.%fZ')
-                        if ((c_time >= start) or (abs(c_time - start) <= delta1hr)):
-                            new_candles.append(c)
-                            ct = ct+1
+                        if self.granularity == 'H1':
+                            if (c_time >= start):
+                                new_candles.append(c)
+                                ct = ct + 1
+                        else:
+                            if ((c_time >= start) or (abs(c_time - start) <= delta1hr)):
+                                new_candles.append(c)
+                                ct = ct+1
 
         new_dict = {'granularity': self.granularity,
                     'instrument' : self.instrument,
@@ -172,7 +177,6 @@ class Connect(object):
 
         startO = datetime.datetime.strptime(start, '%Y-%m-%dT%H:%M:%S')
         endO = datetime.datetime.strptime(end, '%Y-%m-%dT%H:%M:%S')
-
         patt = re.compile("\dD")
         delta = nhours = None
         if patt.match(self.granularity):
@@ -186,6 +190,11 @@ class Connect(object):
             if m1:
                 nhours = int(self.granularity.replace('H', ''))
                 delta = datetime.timedelta(hours=int(nhours))
+            p2 = re.compile('^M')
+            m2 = p2.match(self.granularity)
+            if m2:
+                nmins = int(self.granularity.replace('M', ''))
+                delta = datetime.timedelta(minutes=int(nmins))
 
         # 5000 candles is the Oanda's limit
         res = None
@@ -251,7 +260,6 @@ class Connect(object):
         List of dicts. Each dict contains data for a candle
         '''
         startObj = None
-
         if indir is not None:
             # do not validate if there is serialized data
             startObj = pd.datetime.strptime(start, '%Y-%m-%dT%H:%M:%S')
